@@ -1,4 +1,6 @@
 #include "darknet.h"
+#include <opencv2/highgui/highgui_c.h>
+#include <opencv2/imgproc/imgproc_c.h>
 
 static int coco_ids[] = {1,2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,27,28,31,32,33,34,35,36,37,38,39,40,41,42,43,44,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,67,70,72,73,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90};
 
@@ -577,6 +579,7 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     char *input = buff;
     int j;
     float nms=.3;
+
     while(1){
         if(filename){
             strncpy(input, filename, 256);
@@ -590,54 +593,62 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         image im = load_image_color(input,0,0);
 
         {
-           FILE *fp;
-           int i, j, k;
+            /* write input image as bin file */
+            FILE *fp;
 
-           printf("load_image_color: w %d, h %d, c %d\n", im.w, im.h, im.c);
+            printf("load_image_color: w %d, h %d, c %d\n", im.w, im.h, im.c);
 
-           fp = fopen("yolo_image_in.h", "w");
-           fprintf(fp, "image_in_f32[%d * %d * %d] = {\n", im.w, im.h, im.c);
-           for(k=0;k<im.c;k++)
-           {
-              for(j=0;j<im.h;j++)
-              {
-                 for(i=0;i<im.w;i++)
-                 {
-                    fprintf(fp, "%f,", im.data[i + j * im.w + k * im.w * im.h]);
-                 }
-                 fprintf(fp, "\n");
-              }
-              fprintf(fp, "\n");
-           }
-           fprintf(fp, "};\n");
-           fclose(fp);
+            fp = fopen("yolo_image_in.bin", "wb");
+            fwrite(im.data, im.w * im.h * im.c, sizeof(float), fp);
+            fclose(fp);
         }          
+
+        {
+            /* write 0th channel of input image as png file using opencv */
+            IplImage *in_img_IplImage = cvCreateImage(cvSize(im.w, im.h), IPL_DEPTH_8U, 1);
+
+            for(int jj=0;jj<im.h;jj++)
+            {
+                for(int ii=0;ii<im.w;ii++)
+                {
+                    in_img_IplImage->imageData[ii + jj * im.w] = im.data[ii + jj * im.w] * 255.;
+                }
+            }
+
+            cvSaveImage("in_img.png", in_img_IplImage, 0);
+
+            cvReleaseImage(&in_img_IplImage);
+        }
 
         image sized = letterbox_image(im, net->w, net->h);
 
         {
-           FILE *fp;
-           int i, j, k;
+            /* write letterbox image as bin file */
+            FILE *fp;
 
-           printf("letterbox_image: w %d, h %d, c %d\n", sized.w, sized.h, sized.c);
+            printf("letterbox_image: w %d, h %d, c %d\n", sized.w, sized.h, sized.c);
 
-           fp = fopen("yolo_image_sized.h", "w");
-           fprintf(fp, "image_sized_f32[%d * %d * %d] = {\n", sized.w, sized.h, sized.c);
-           for(k=0;k<sized.c;k++)
-           {
-              for(j=0;j<sized.h;j++)
-              {
-                 for(i=0;i<sized.w;i++)
-                 {
-                    fprintf(fp, "%f,", sized.data[i + j * sized.w + k * sized.w * sized.h]);
-                 }
-                 fprintf(fp, "\n");
-              }
-              fprintf(fp, "\n");
-           }
-           fprintf(fp, "};\n");
-           fclose(fp);
+            fp = fopen("yolo_image_sized.bin", "wb");
+            fwrite(sized.data, sized.w * sized.h * sized.c, sizeof(float), fp);
+            fclose(fp);
         }          
+
+        {
+            /* write 0th channel of letterbox image as png file using opencv */
+            IplImage *in_img_IplImage = cvCreateImage(cvSize(sized.w, sized.h), IPL_DEPTH_8U, 1);
+
+            for(int jj=0;jj<sized.h;jj++)
+            {
+                for(int ii=0;ii<sized.w;ii++)
+                {
+                    in_img_IplImage->imageData[ii + jj * sized.w] = sized.data[ii + jj * sized.w] * 255.;
+                }
+            }
+
+            cvSaveImage("letterbox_img.png", in_img_IplImage, 0);
+
+            cvReleaseImage(&in_img_IplImage);
+        }
 
         //image sized = resize_image(im, net->w, net->h);
         //image sized2 = resize_max(im, net->w);

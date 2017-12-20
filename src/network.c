@@ -202,31 +202,6 @@ void forward_network(network *netp)
         if(l.truth) {
             net.truth = l.output;
         }
-        {
-            FILE *fp;
-            int ii, jj, kk;
-            char buffer[100];
-
-            printf("layer %d: w %d, h %d, c %d\n", i, l.out_w, l.out_h, l.out_c);
-
-            sprintf(buffer, "yolo_layer_%d.h", i);
-            fp = fopen(buffer, "w");
-            fprintf(fp, "layer_%d_f32[%d * %d * %d] = {\n", i, l.out_w, l.out_h, l.out_c);
-            for(kk=0;kk<l.out_c;kk++)
-            {
-                for(jj=0;jj<l.out_h;jj++)
-                {
-                    for(ii=0;ii<l.out_w;ii++)
-                    {
-                        fprintf(fp, "%f,", l.output[ii + jj * l.out_w + kk * l.out_w * l.out_h]);
-                    }
-                    fprintf(fp, "\n");
-                }
-                fprintf(fp, "\n");
-            }
-            fprintf(fp, "};\n");
-            fclose(fp);
-        }          
     }
     calc_network_cost(netp);
 }
@@ -514,6 +489,9 @@ float *network_predict(network *net, float *input)
     net->truth = 0;
     net->train = 0;
     net->delta = 0;
+
+    printf("network_predict: forward_network\n");
+
     forward_network(net);
     float *out = net->output;
     *net = orig;
@@ -758,6 +736,19 @@ void forward_network_gpu(network *netp)
             net.truth_gpu = l.output_gpu;
             net.truth = l.output;
         }
+
+        {
+            /* write intermediate layer results as bin file */
+            FILE *fp;
+            char buffer[100];
+
+            printf("forward_network_gpu: i:%d, in (h, w, c): (%d, %d, %d), out (h, w, c): (%d, %d, %d), l.truth: %d, l.batch: %d\n", i, l.h, l.w, l.c, l.out_h, l.out_w, l.out_c, l.truth, l.batch);
+
+            sprintf(buffer, "yolo_layer_%d.bin", i);
+            fp = fopen(buffer, "wb");
+            fwrite(l.output, l.out_w * l.out_h * l.out_c, sizeof(float), fp);
+            fclose(fp);
+        }          
     }
     pull_network_output(netp);
     calc_network_cost(netp);
