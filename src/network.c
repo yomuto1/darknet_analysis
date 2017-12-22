@@ -202,6 +202,23 @@ void forward_network(network *netp)
         if(l.truth) {
             net.truth = l.output;
         }
+
+        {
+            /* write intermediate layer results as bin file */
+            FILE *fp;
+            char buffer[100];
+
+            printf("forward_network cpu: i:%d, in (h, w, c): (%d, %d, %d), out (h, w, c): (%d, %d, %d), l.truth: %d, l.batch: %d\n", i, l.h, l.w, l.c, l.out_h, l.out_w, l.out_c, l.truth, l.batch);
+
+            sprintf(buffer, "yolo_cpu_layer_%d.bin", i);
+            fp = fopen(buffer, "wb");
+            if(NULL == fp)
+            {
+                printf("yolo_cpu_layer open error\n");
+            }
+            fwrite(l.output, l.out_w * l.out_h * l.out_c, sizeof(float), fp);
+            fclose(fp);
+        }          
     }
     calc_network_cost(netp);
 }
@@ -744,8 +761,12 @@ void forward_network_gpu(network *netp)
 
             printf("forward_network_gpu: i:%d, in (h, w, c): (%d, %d, %d), out (h, w, c): (%d, %d, %d), l.truth: %d, l.batch: %d\n", i, l.h, l.w, l.c, l.out_h, l.out_w, l.out_c, l.truth, l.batch);
 
-            sprintf(buffer, "yolo_layer_%d.bin", i);
+            sprintf(buffer, "yolo_gpu_layer_%d.bin", i);
             fp = fopen(buffer, "wb");
+            if(NULL == fp)
+            {
+                printf("yolo_gpu_layer open error\n");
+            }
             fwrite(l.output, l.out_w * l.out_h * l.out_c, sizeof(float), fp);
             fclose(fp);
         }          
