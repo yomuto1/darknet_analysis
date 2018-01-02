@@ -243,6 +243,8 @@ void push_batchnorm_layer(layer l)
 
 void forward_batchnorm_layer_gpu(layer l, network net)
 {
+    printf("forward_batchnorm_layer_gpu, l.type = %d, net.train = %d\n", l.type, net.train);
+
     if(l.type == BATCHNORM) copy_gpu(l.outputs*l.batch, net.input_gpu, 1, l.output_gpu, 1);
     copy_gpu(l.outputs*l.batch, l.output_gpu, 1, l.x_gpu, 1);
     if (net.train) {
@@ -284,10 +286,10 @@ void forward_batchnorm_layer_gpu(layer l, network net)
 #endif
     } else {
         normalize_gpu(l.output_gpu, l.rolling_mean_gpu, l.rolling_variance_gpu, l.batch, l.out_c, l.out_h*l.out_w);
+
         scale_bias_gpu(l.output_gpu, l.scales_gpu, l.batch, l.out_c, l.out_h*l.out_w);
         add_bias_gpu(l.output_gpu, l.biases_gpu, l.batch, l.out_c, l.out_w*l.out_h);
     }
-
 }
 
 void backward_batchnorm_layer_gpu(layer l, network net)
