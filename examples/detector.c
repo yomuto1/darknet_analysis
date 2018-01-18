@@ -641,7 +641,6 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
             {
                 printf("yolo_image_sized fopen error\n");
             }
-            fwrite(im.data, im.w * im.h * im.c, sizeof(float), fp);
             fwrite(sized.data, sized.w * sized.h * sized.c, sizeof(float), fp);
             fclose(fp);
         }          

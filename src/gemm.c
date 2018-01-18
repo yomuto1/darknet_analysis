@@ -5,6 +5,13 @@
 #include <stdio.h>
 #include <math.h>
 
+#define DEBUG_WRITING_GEMM (0)
+
+#if (1 == DEBUG_WRITING_GEMM)
+FILE *fp_fprintf_gemm;
+static unsigned int s_fprintf_init_u32 = 0;
+#endif
+
 void gemm_bin(int M, int N, int K, float ALPHA, 
         char  *A, int lda, 
         float *B, int ldb,
@@ -83,6 +90,12 @@ void gemm_nn(int M, int N, int K, float ALPHA,
             register float A_PART = ALPHA*A[i*lda+k];
             for(j = 0; j < N; ++j){
                 C[i*ldc+j] += A_PART*B[k*ldb+j];
+#if (1 == DEBUG_WRITING_GEMM)
+                if((i == 0) && ((j < 3000) || ((j > 40000) && (j < 55000))))
+                {
+                    fprintf(fp_fprintf_gemm, "k: %d, j: %d, A: %f, B: %f, C: %f\n", k, j, A_PART, B[k*ldb+j], C[i*ldc+j]);
+                }
+#endif
             }
         }
     }
@@ -148,7 +161,14 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float BETA,
         float *C, int ldc)
 {
+#if (1 == DEBUG_WRITING_GEMM)
     printf("cpu: %d %d %d %d %d %f %d %d %f %d\n",TA, TB, M, N, K, ALPHA, lda, ldb, BETA, ldc);
+    if(s_fprintf_init_u32 == 0)
+    {
+        fp_fprintf_gemm = fopen("gemm_nn.txt", "w");
+        fprintf(fp_fprintf_gemm, "cpu: %d %d %d %d %d %f %d %d %f %d\n",TA, TB, M, N, K, ALPHA, lda, ldb, BETA, ldc);
+    }
+#endif
     int i, j;
     for(i = 0; i < M; ++i){
         for(j = 0; j < N; ++j){
@@ -163,6 +183,14 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         gemm_nt(M, N, K, ALPHA,A,lda, B, ldb,C,ldc);
     else
         gemm_tt(M, N, K, ALPHA,A,lda, B, ldb,C,ldc);
+
+#if (1 == DEBUG_WRITING_GEMM)
+    if(s_fprintf_init_u32 == 0)
+    {
+        fclose(fp_fprintf_gemm);
+        s_fprintf_init_u32 = 1;
+    }
+#endif
 }
 
 #ifdef GPU
@@ -175,7 +203,6 @@ void gemm_gpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float BETA,
         float *C_gpu, int ldc)
 {
-    printf("gpu: %d %d %d %d %d %f %d %d %f %d\n",TA, TB, M, N, K, ALPHA, lda, ldb, BETA, ldc);
     cublasHandle_t handle = blas_handle();
     cudaError_t status = cublasSgemm(handle, (TB ? CUBLAS_OP_T : CUBLAS_OP_N), 
             (TA ? CUBLAS_OP_T : CUBLAS_OP_N), N, M, K, &ALPHA, B_gpu, ldb, A_gpu, lda, &BETA, C_gpu, ldc);
