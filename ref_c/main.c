@@ -4,6 +4,16 @@
 
 #define DEBUG_WRITING (0)
 
+#define WID_SRC (768)
+#define HEI_SRC (576)
+#define CHN_SRC (3)
+#define WID_L00 (608)
+#define HEI_L00 (608)
+#define CHN_L00 (32)
+#define K_W_L00 (3)
+#define K_H_L00 (3)
+#define PAD_L00 (1)
+
 #if (1 == DEBUG_WRITING)
 FILE *fp_fprintf_debug;
 static unsigned int s_fprintf_debug_init_u32 = 0;
@@ -17,14 +27,14 @@ static void add_bias(float *output, float *biases, int n, int size);
 int main(void)
 {
     FILE *fp;
-    static float sa_image_sized_f32[608 * 608 * 32];
-    static float sa_out_l00_f32[608 * 608 * 32];
-    static float sa_weights_l00_f32[3 * 3 * 3 * 32];
-    static float sa_mean_l00_f32[32];
-    static float sa_variance_l00_f32[32];
-    static float sa_scale_l00_f32[32];
-    static float sa_bias_l00_f32[32];
-    static float sa_ref_l00_f32[608 * 608 * 32];
+    static float sa_image_sized_f32[WID_L00 * HEI_L00 * CHN_L00];
+    static float sa_out_l00_f32[WID_L00 * HEI_L00 * CHN_L00];
+    static float sa_weights_l00_f32[K_W_L00 * K_H_L00 * CHN_SRC * CHN_L00];
+    static float sa_mean_l00_f32[CHN_L00];
+    static float sa_variance_l00_f32[CHN_L00];
+    static float sa_scale_l00_f32[CHN_L00];
+    static float sa_bias_l00_f32[CHN_L00];
+    static float sa_ref_l00_f32[WID_L00 * HEI_L00 * CHN_L00];
     int i, j, k;
     size_t fread_return;
     clock_t clk_srt, clk_end;
@@ -42,7 +52,7 @@ int main(void)
         printf("read input data fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_image_sized_f32, 608 * 608 * 3, sizeof(float), fp);
+    fread_return = fread(sa_image_sized_f32, WID_L00 * HEI_L00 * 3, sizeof(float), fp);
     if(sizeof(float) != fread_return)
     {
         printf("fread error\n");
@@ -56,7 +66,7 @@ int main(void)
         printf("read weights fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_weights_l00_f32, 3 * 3 * 3 * 32, sizeof(float), fp);
+    fread_return = fread(sa_weights_l00_f32, K_W_L00 * K_H_L00 * CHN_SRC * CHN_L00, sizeof(float), fp);
     if(sizeof(float) != fread_return)
     {
         printf("fread error\n");
@@ -70,7 +80,7 @@ int main(void)
         printf("read mean fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_mean_l00_f32, 32, sizeof(float), fp);
+    fread_return = fread(sa_mean_l00_f32, CHN_L00, sizeof(float), fp);
     if(sizeof(float) != fread_return)
     {
         printf("fread error\n");
@@ -84,7 +94,7 @@ int main(void)
         printf("read variance fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_variance_l00_f32, 32, sizeof(float), fp);
+    fread_return = fread(sa_variance_l00_f32, CHN_L00, sizeof(float), fp);
     if(sizeof(float) != fread_return)
     {
         printf("fread error\n");
@@ -98,7 +108,7 @@ int main(void)
         printf("read scale fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_scale_l00_f32, 32, sizeof(float), fp);
+    fread_return = fread(sa_scale_l00_f32, CHN_L00, sizeof(float), fp);
     fclose(fp);
     if(sizeof(float) != fread_return)
     {
@@ -112,7 +122,7 @@ int main(void)
         printf("read bias fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_bias_l00_f32, 32, sizeof(float), fp);
+    fread_return = fread(sa_bias_l00_f32, CHN_L00, sizeof(float), fp);
     if(sizeof(float) != fread_return)
     {
         printf("fread error\n");
@@ -125,15 +135,15 @@ int main(void)
     clk_end = clock();
     printf("l00 convolution: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
     clk_srt = clock();
-    normalize_cpu(sa_out_l00_f32, sa_mean_l00_f32, sa_variance_l00_f32, 32, 608 * 608);
+    normalize_cpu(sa_out_l00_f32, sa_mean_l00_f32, sa_variance_l00_f32, CHN_L00, WID_L00 * HEI_L00);
     clk_end = clock();
     printf("l00 normalize: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
     clk_srt = clock();
-    scale_bias(sa_out_l00_f32, sa_scale_l00_f32, 32, 608 * 608);
+    scale_bias(sa_out_l00_f32, sa_scale_l00_f32, CHN_L00, WID_L00 * HEI_L00);
     clk_end = clock();
     printf("l00 scale_bias: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
     clk_srt = clock();
-    add_bias(sa_out_l00_f32, sa_bias_l00_f32, 32, 608 * 608);
+    add_bias(sa_out_l00_f32, sa_bias_l00_f32, CHN_L00, WID_L00 * HEI_L00);
     clk_end = clock();
     printf("l00 add_bias: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
 
@@ -148,7 +158,7 @@ int main(void)
         printf("read ref data l00 fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_ref_l00_f32, 608 * 608 * 32, sizeof(float), fp);
+    fread_return = fread(sa_ref_l00_f32, WID_L00 * HEI_L00 * CHN_L00, sizeof(float), fp);
     if(sizeof(float) != fread_return)
     {
         printf("fread error\n");
@@ -156,15 +166,15 @@ int main(void)
     }
     fclose(fp);
 
-    for(k = 0; k < 32; k++)
+    for(k = 0; k < CHN_L00; k++)
     {
-        for(j = 0 + 1; j < 608 - 1; j++)
+        for(j = 0 + PAD_L00; j < HEI_L00 - PAD_L00; j++)
         {
-            for(i = 0 + 1; i < 608 - 1; i++)
+            for(i = 0 + PAD_L00; i < WID_L00 - PAD_L00; i++)
             {
-                if(fabsf(sa_out_l00_f32[i + j * 608 + k * 608 * 608] - sa_ref_l00_f32[i + j * 608 + k * 608 * 608]) > 0.000001f)
+                if(fabsf(sa_out_l00_f32[i + j * WID_L00 + k * WID_L00 * HEI_L00] - sa_ref_l00_f32[i + j * WID_L00 + k * WID_L00 * HEI_L00]) > 0.000001f)
                 {
-                    printf("layer_0_f32 mismatch: w %d, h %d, c %d, out %f, GT %f\n", i, j, k, sa_out_l00_f32[i + j * 608 + k * 608 * 608], sa_ref_l00_f32[i + j * 608 + k * 608 * 608]);
+                    printf("layer_0_f32 mismatch: w %d, h %d, c %d, out %f, GT %f\n", i, j, k, sa_out_l00_f32[i + j * WID_L00 + k * WID_L00 * HEI_L00], sa_ref_l00_f32[i + j * WID_L00 + k * WID_L00 * HEI_L00]);
                 }
             }
         }
@@ -180,11 +190,11 @@ static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weight
     float wei_f32;
     float acc_f32;
 
-    for(co = 0; co < 32; co++)
+    for(co = 0; co < CHN_L00; co++)
     {
-        for(j = 0; j < 608; j++)
+        for(j = 0; j < HEI_L00; j++)
         {
-            for(i = 0; i < 608; i++)
+            for(i = 0; i < WID_L00; i++)
             {
                 acc_f32 = 0.0f;
                 for(ci = 0; ci < 3; ci++)
@@ -193,8 +203,8 @@ static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weight
                     {
                         for(kw = 0; kw < 3; kw++)
                         {
-                            src_f32 = p_in_f32[ci * 608 * 608 + (j - 1 + kh) * 608 + (i - 1) + kw];
-                            wei_f32 = p_weights_f32[co * 3 * 3 * 3 + ci * 3 * 3 + kh * 3 + kw];
+                            src_f32 = p_in_f32[ci * WID_L00 * HEI_L00 + (j - PAD_L00 + kh) * WID_L00 + (i - PAD_L00) + kw];
+                            wei_f32 = p_weights_f32[co * K_W_L00 * K_H_L00 * CHN_SRC + ci * K_W_L00 * K_H_L00 + kh * K_W_L00 + kw];
                             acc_f32 += src_f32 * wei_f32;
 #if (1 == DEBUG_WRITING)
                             if((co == 0) && (ci == 0) && (j < 20) || ((j > 60) && (j < 80)))
@@ -205,7 +215,7 @@ static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weight
                         }
                     }
                 }
-                p_out_f32[co * 608 * 608 + j * 608 + i] = acc_f32;
+                p_out_f32[co * WID_L00 * HEI_L00 + j * WID_L00 + i] = acc_f32;
             }
         }
     } 
