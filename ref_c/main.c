@@ -1,8 +1,9 @@
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include <time.h>
 
-#define DEBUG_WRITING (0)
+#define DEBUG_WRITING (1)
 
 #define WID_SRC (768)
 #define HEI_SRC (576)
@@ -16,7 +17,6 @@
 
 #if (1 == DEBUG_WRITING)
 FILE *fp_fprintf_debug;
-static unsigned int s_fprintf_debug_init_u32 = 0;
 #endif
 
 static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weights_f32);
@@ -40,6 +40,8 @@ int main(void)
     clock_t clk_srt, clk_end;
 
     printf("yolo reference C code by Hyuk Lee\n");
+
+    memset(sa_out_l00_f32, 0, WID_L00 * HEI_L00 * CHN_L00 * sizeof(float));
 
 #if (1 == DEBUG_WRITING)
     fp_fprintf_debug = fopen("ref_c_debug.txt", "w");
@@ -134,6 +136,19 @@ int main(void)
     convolution_ref_c(sa_out_l00_f32, sa_image_sized_f32, sa_weights_l00_f32);
     clk_end = clock();
     printf("l00 convolution: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
+    {
+        FILE *fp;
+        char buffer[100];
+
+        sprintf(buffer, "yolo_convolution_out_ref_c_%dx%dx%d.bin", WID_L00, HEI_L00, CHN_L00);
+        fp = fopen(buffer, "wb");
+        if(NULL == fp)
+        {
+            printf("yolo_convolution_out_ref_c open error\n");
+        }
+        fwrite(sa_out_l00_f32, WID_L00 * HEI_L00 * CHN_L00, sizeof(float), fp);
+        fclose(fp);
+    }
     clk_srt = clock();
     normalize_cpu(sa_out_l00_f32, sa_mean_l00_f32, sa_variance_l00_f32, CHN_L00, WID_L00 * HEI_L00);
     clk_end = clock();
@@ -207,7 +222,7 @@ static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weight
                             wei_f32 = p_weights_f32[co * K_W_L00 * K_H_L00 * CHN_SRC + ci * K_W_L00 * K_H_L00 + kh * K_W_L00 + kw];
                             acc_f32 += src_f32 * wei_f32;
 #if (1 == DEBUG_WRITING)
-                            if((co == 0) && (ci == 0) && (j < 20) || ((j > 60) && (j < 80)))
+                            if((co == 0) && (ci == 0) && ((j < 20) || ((j > 60) && (j < 80))))
                             {
                                 fprintf(fp_fprintf_debug, "kw: %d, kh: %d, ci: %d, i: %d, j: %d, in: %f, wei: %f, acc: %f\n", kw, kh, ci, i, j, src_f32, wei_f32, acc_f32);
                             }
