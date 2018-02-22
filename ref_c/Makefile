@@ -36,7 +36,7 @@ DEPS = $(wildcard src/*.h) Makefile
 all: obj $(EXEC)
 
 $(EXEC): $(OBJS)
-	 $(CC) `pkg-config --cflags opencv` $(COMMON) $(CFLAGS) $^ `pkg-config --libs opencv` -o $@ $(LDFLAGS)
+	 $(CC) $(COMMON) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 $(OBJDIR)%.o: %.c $(DEPS)
 	$(CC) $(COMMON) $(CFLAGS) -c $< -o $@

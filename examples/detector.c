@@ -597,15 +597,28 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         {
             /* write input image as bin file */
             FILE *fp;
+            static unsigned char sst_yolo_image_in_u08[768 * 576 * 3];
+            int ii, jj, kk;
 
             printf("load_image_color: w %d, h %d, c %d\n", im.w, im.h, im.c);
+
+            for(kk=0;kk<im.c;kk++)
+            {
+                for(jj=0;jj<im.h;jj++)
+                {
+                    for(ii=0;ii<im.w;ii++)
+                    {
+                        sst_yolo_image_in_u08[ii + jj * im.w + kk * im.w * im.h] = im.data[ii + jj * im.w + kk * im.w * im.h] * 255.;
+                    }
+                }
+            }
 
             fp = fopen("yolo_image_in.bin", "wb");
             if(NULL == fp)
             {
                 printf("yolo_image_in fopen error\n");
             }
-            fwrite(im.data, im.w * im.h * im.c, sizeof(float), fp);
+            fwrite(sst_yolo_image_in_u08, im.w * im.h * im.c, sizeof(unsigned char), fp);
             fclose(fp);
         }          
 
