@@ -14,6 +14,9 @@
 #define K_W_L00 (3)
 #define K_H_L00 (3)
 #define PAD_L00 (1)
+#define WID_L01 (304)
+#define HEI_L01 (304)
+#define CHN_L01 (32)
 
 #if (1 == DEBUG_WRITING)
 FILE *fp_fprintf_debug;
@@ -25,6 +28,7 @@ static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weight
 static void normalize_cpu(float *x, float *mean, float *variance, int filters, int spatial);
 static void scale_bias(float *output, float *scales, int n, int size);
 static void add_bias(float *output, float *biases, int n, int size);
+static void maxpool_2x2_ref_c(float *p_out_f32, float *p_in_f32, unsigned int chn_u32, unsigned int wid_out_u32, unsigned int hei_out_u32);
 
 int main(void)
 {
@@ -33,6 +37,7 @@ int main(void)
     static float sa_image_in_f32[WID_SRC * HEI_SRC * CHN_SRC];
     static float sa_image_sized_f32[WID_L00 * HEI_L00 * CHN_SRC];
     static float sa_out_l00_f32[WID_L00 * HEI_L00 * CHN_L00];
+    static float sa_out_l01_f32[WID_L01 * HEI_L01 * CHN_L01];
     static float sa_weights_l00_f32[K_W_L00 * K_H_L00 * CHN_SRC * CHN_L00];
     static float sa_mean_l00_f32[CHN_L00];
     static float sa_variance_l00_f32[CHN_L00];
@@ -40,6 +45,7 @@ int main(void)
     static float sa_bias_l00_f32[CHN_L00];
     static float sa_ref_sized_f32[WID_L00 * HEI_L00 * CHN_SRC];
     static float sa_ref_l00_f32[WID_L00 * HEI_L00 * CHN_L00];
+    static float sa_ref_l01_f32[WID_L01 * HEI_L01 * CHN_L01];
     int i, j, k;
     size_t fread_return;
     clock_t clk_srt, clk_end;
@@ -238,6 +244,41 @@ int main(void)
         }
     }
 
+    clk_srt = clock();
+    //maxpool_2x2_ref_c(sa_out_l01_f32, sa_out_l00_f32, CHN_L01, WID_L01, HEI_L01);
+    maxpool_2x2_ref_c(sa_out_l01_f32, sa_ref_l00_f32, CHN_L01, WID_L01, HEI_L01);
+    clk_end = clock();
+    printf("l01 maxpool: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
+
+    /* read ref data layer 1 */
+    fp = fopen("yolo_cpu_layer_1.bin", "rb");
+    if(NULL == fp)
+    {
+        printf("read ref data l01 fopen error\n");
+        return -1;
+    }
+    fread_return = fread(sa_ref_l01_f32, WID_L01 * HEI_L01 * CHN_L01, sizeof(float), fp);
+    if(sizeof(float) != fread_return)
+    {
+        printf("fread error\n");
+        return -1;
+    }
+    fclose(fp);
+
+    for(k = 0; k < CHN_L01; k++)
+    {
+        for(j = 0 + PAD_L00; j < HEI_L01 - PAD_L00; j++)
+        {
+            for(i = 0 + PAD_L00; i < WID_L01 - PAD_L00; i++)
+            {
+                if(fabsf(sa_out_l01_f32[i + j * WID_L01 + k * WID_L01 * HEI_L01] - sa_ref_l01_f32[i + j * WID_L01 + k * WID_L01 * HEI_L01]) > 0.000001f)
+                {
+                    printf("layer_1_f32 mismatch: w %d, h %d, c %d, out %f, GT %f\n", i, j, k, sa_out_l01_f32[i + j * WID_L01 + k * WID_L01 * HEI_L01], sa_ref_l01_f32[i + j * WID_L01 + k * WID_L01 * HEI_L01]);
+                }
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -385,6 +426,36 @@ static void add_bias(float *output, float *biases, int n, int size)
             output[i * size + j] += biases[i];
             /* LEAKY ACTIATION */
             output[i * size + j] = (output[i * size + j] > 0) ? output[i * size + j] : 0.1f * output[i * size + j];
+        }
+    }
+}
+
+static void maxpool_2x2_ref_c(float *p_out_f32, float *p_in_f32, unsigned int chn_u32, unsigned int wid_out_u32, unsigned int hei_out_u32)
+{
+    unsigned int c_u32, j_u32, i_u32;
+    float *p_in_tmp_f32, *p_out_tmp_f32;
+    float in_00_f32, in_10_f32, in_01_f32, in_11_f32;
+
+    for(c_u32 = 0; c_u32 < chn_u32; c_u32++)
+    {
+        p_in_tmp_f32 = &p_in_f32[wid_out_u32 * 2 * hei_out_u32 * 2 * c_u32];
+        p_out_tmp_f32 = &p_out_f32[wid_out_u32 * hei_out_u32 * c_u32];
+
+        for(j_u32 = 0; j_u32 < hei_out_u32; j_u32++)
+        {
+            for(i_u32 = 0; i_u32 < wid_out_u32; i_u32++)
+            {
+                in_00_f32 = p_in_tmp_f32[i_u32 * 2 + j_u32 * 2 * (wid_out_u32 * 2)];
+                in_10_f32 = p_in_tmp_f32[i_u32 * 2 + 1 + j_u32 * 2 * (wid_out_u32 * 2)];
+                in_01_f32 = p_in_tmp_f32[i_u32 * 2 + (j_u32 * 2 + 1) * (wid_out_u32 * 2)];
+                in_11_f32 = p_in_tmp_f32[i_u32 * 2 + 1 + (j_u32 * 2 + 1) * (wid_out_u32 * 2)];
+
+                in_00_f32 = (in_10_f32 > in_00_f32) ? in_10_f32 : in_00_f32;
+                in_00_f32 = (in_01_f32 > in_00_f32) ? in_01_f32 : in_00_f32;
+                in_00_f32 = (in_11_f32 > in_00_f32) ? in_11_f32 : in_00_f32;
+
+                p_out_tmp_f32[i_u32 + j_u32 * wid_out_u32] = in_00_f32;
+            }
         }
     }
 }
