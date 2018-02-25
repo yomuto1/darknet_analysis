@@ -11,8 +11,7 @@
 #define WID_L00 (608)
 #define HEI_L00 (608)
 #define CHN_L00 (32)
-#define K_W_L00 (3)
-#define K_H_L00 (3)
+#define KER_L00 (3)
 #define PAD_L00 (1)
 #define WID_L01 (304)
 #define HEI_L01 (304)
@@ -22,13 +21,13 @@
 FILE *fp_fprintf_debug;
 #endif
 
-static void letterbox_image_natC(float *p_im_out_f32, float *p_im_in_f32, int im_w, int im_h, int im_c, int w, int h);
-static void resize_image_natC(float *p_im_out_f32, float *p_im_in_f32, int im_w, int im_h, int im_c, int w, int h);
-static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weights_f32);
+static void letterbox_image_natC(float * __restrict p_im_out_f32, const float * __restrict p_im_in_f32, const int im_w, const int im_h, const int im_c, const int w, const int h);
+static void resize_image_natC(float * __restrict p_im_out_f32, const float * __restrict p_im_in_f32, const int im_w, const int im_h, const int im_c, const int w, const int h);
+static void convolution_ref_c(float * __restrict p_out_f32, const float * __restrict p_in_f32, const float * __restrict p_weights_f32, const int chn_in_s32, const int wid_in_s32, const int hei_in_s32, const int chn_out_s32, const int wid_out_s32, const int hei_out_s32, const int ker_s32, const int pad_s32);
 static void normalize_cpu(float *x, float *mean, float *variance, int filters, int spatial);
 static void scale_bias(float *output, float *scales, int n, int size);
 static void add_bias(float *output, float *biases, int n, int size);
-static void maxpool_2x2_ref_c(float *p_out_f32, float *p_in_f32, unsigned int chn_u32, unsigned int wid_out_u32, unsigned int hei_out_u32);
+static void maxpool_2x2_ref_c(float * __restrict p_out_f32, const float * __restrict p_in_f32, const unsigned int chn_u32, const unsigned int wid_out_u32, const unsigned int hei_out_u32);
 
 int main(void)
 {
@@ -38,7 +37,7 @@ int main(void)
     static float sa_image_sized_f32[WID_L00 * HEI_L00 * CHN_SRC];
     static float sa_out_l00_f32[WID_L00 * HEI_L00 * CHN_L00];
     static float sa_out_l01_f32[WID_L01 * HEI_L01 * CHN_L01];
-    static float sa_weights_l00_f32[K_W_L00 * K_H_L00 * CHN_SRC * CHN_L00];
+    static float sa_weights_l00_f32[KER_L00 * KER_L00 * CHN_SRC * CHN_L00];
     static float sa_mean_l00_f32[CHN_L00];
     static float sa_variance_l00_f32[CHN_L00];
     static float sa_scale_l00_f32[CHN_L00];
@@ -79,7 +78,7 @@ int main(void)
         printf("read weights fopen error\n");
         return -1;
     }
-    fread_return = fread(sa_weights_l00_f32, K_W_L00 * K_H_L00 * CHN_SRC * CHN_L00, sizeof(float), fp);
+    fread_return = fread(sa_weights_l00_f32, KER_L00 * KER_L00 * CHN_SRC * CHN_L00, sizeof(float), fp);
     if(sizeof(float) != fread_return)
     {
         printf("fread error\n");
@@ -182,7 +181,7 @@ int main(void)
     }
 
     clk_srt = clock();
-    convolution_ref_c(sa_out_l00_f32, sa_image_sized_f32, sa_weights_l00_f32);
+    convolution_ref_c(sa_out_l00_f32, sa_image_sized_f32, sa_weights_l00_f32, CHN_SRC, WID_L00, HEI_L00, CHN_L00, WID_L00, HEI_L00, KER_L00, PAD_L00);
     clk_end = clock();
     printf("l00 convolution: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
     {
@@ -245,8 +244,11 @@ int main(void)
     }
 
     clk_srt = clock();
-    //maxpool_2x2_ref_c(sa_out_l01_f32, sa_out_l00_f32, CHN_L01, WID_L01, HEI_L01);
+#if 1
+    maxpool_2x2_ref_c(sa_out_l01_f32, sa_out_l00_f32, CHN_L01, WID_L01, HEI_L01);
+#else
     maxpool_2x2_ref_c(sa_out_l01_f32, sa_ref_l00_f32, CHN_L01, WID_L01, HEI_L01);
+#endif
     clk_end = clock();
     printf("l01 maxpool: %f secs\n", (double)(clk_end - clk_srt) / CLOCKS_PER_SEC);
 
@@ -282,7 +284,7 @@ int main(void)
     return 0;
 }
 
-static void letterbox_image_natC(float *p_im_out_f32, float *p_im_in_f32, int im_w, int im_h, int im_c, int w, int h) /* new: in */
+static void letterbox_image_natC(float * __restrict p_im_out_f32, const float * __restrict p_im_in_f32, const int im_w, const int im_h, const int im_c, const int w, const int h) /* new: in */
 {
     int new_w = im_w;
     int new_h = im_h;
@@ -310,7 +312,7 @@ static void letterbox_image_natC(float *p_im_out_f32, float *p_im_in_f32, int im
     }
 }
 
-static void resize_image_natC(float *p_im_out_f32, float *p_im_in_f32, int im_w, int im_h, int im_c, int w, int h) /* w: out_w, h: out_h */
+static void resize_image_natC(float * __restrict p_im_out_f32, const float * __restrict p_im_in_f32, const int im_w, const int im_h, const int im_c, const int w, const int h) /* w: out_w, h: out_h */
 {
     static float sst_part_f32[WID_L00 * HEI_SRC * CHN_SRC]; /* big enough */
     int r, c, k;
@@ -350,28 +352,28 @@ static void resize_image_natC(float *p_im_out_f32, float *p_im_in_f32, int im_w,
     }
 }
 
-static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weights_f32)
+static void convolution_ref_c(float * __restrict p_out_f32, const float * __restrict p_in_f32, const float * __restrict p_weights_f32, const int chn_in_s32, const int wid_in_s32, const int hei_in_s32, const int chn_out_s32, const int wid_out_s32, const int hei_out_s32, const int ker_s32, const int pad_s32)
 {
     int i, j, ci, co, kw, kh;
     float src_f32;
     float wei_f32;
     float acc_f32;
 
-    for(co = 0; co < CHN_L00; co++)
+    for(co = 0; co < chn_out_s32; co++)
     {
-        for(j = 0; j < HEI_L00; j++)
+        for(j = 0; j < hei_out_s32; j++)
         {
-            for(i = 0; i < WID_L00; i++)
+            for(i = 0; i < wid_out_s32; i++)
             {
                 acc_f32 = 0.0f;
-                for(ci = 0; ci < 3; ci++)
+                for(ci = 0; ci < chn_in_s32; ci++)
                 {
-                    for(kh = 0; kh < 3; kh++)
+                    for(kh = 0; kh < ker_s32; kh++)
                     {
-                        for(kw = 0; kw < 3; kw++)
+                        for(kw = 0; kw < ker_s32; kw++)
                         {
-                            src_f32 = p_in_f32[ci * WID_L00 * HEI_L00 + (j - PAD_L00 + kh) * WID_L00 + (i - PAD_L00) + kw];
-                            wei_f32 = p_weights_f32[co * K_W_L00 * K_H_L00 * CHN_SRC + ci * K_W_L00 * K_H_L00 + kh * K_W_L00 + kw];
+                            src_f32 = p_in_f32[ci * wid_in_s32 * hei_in_s32 + (j - pad_s32 + kh) * wid_in_s32 + (i - pad_s32) + kw];
+                            wei_f32 = p_weights_f32[co * ker_s32 * ker_s32 * chn_in_s32 + ci * ker_s32 * ker_s32 + kh * ker_s32 + kw];
                             acc_f32 += src_f32 * wei_f32;
 #if (1 == DEBUG_WRITING)
                             if((co == 0) && (ci == 0) && ((j < 20) || ((j > 60) && (j < 80))))
@@ -382,7 +384,7 @@ static void convolution_ref_c(float *p_out_f32, float *p_in_f32, float *p_weight
                         }
                     }
                 }
-                p_out_f32[co * WID_L00 * HEI_L00 + j * WID_L00 + i] = acc_f32;
+                p_out_f32[co * wid_out_s32 * hei_out_s32 + j * wid_out_s32 + i] = acc_f32;
             }
         }
     } 
@@ -430,10 +432,11 @@ static void add_bias(float *output, float *biases, int n, int size)
     }
 }
 
-static void maxpool_2x2_ref_c(float *p_out_f32, float *p_in_f32, unsigned int chn_u32, unsigned int wid_out_u32, unsigned int hei_out_u32)
+static void maxpool_2x2_ref_c(float * __restrict p_out_f32, const float * __restrict p_in_f32, const unsigned int chn_u32, const unsigned int wid_out_u32, const unsigned int hei_out_u32)
 {
     unsigned int c_u32, j_u32, i_u32;
-    float *p_in_tmp_f32, *p_out_tmp_f32;
+    const float * __restrict p_in_tmp_f32;
+    float * __restrict p_out_tmp_f32;
     float in_00_f32, in_10_f32, in_01_f32, in_11_f32;
 
     for(c_u32 = 0; c_u32 < chn_u32; c_u32++)
