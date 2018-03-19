@@ -647,7 +647,7 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
             /* write letterbox image as bin file */
             FILE *fp;
 
-            printf("letterbox_image: w %d, h %d, c %d\n", sized.w, sized.h, sized.c);
+            printf("letterbox_image: w %d, h %d, c %d, im.w = %d, im.h = %d, im.c = %d, net->w = %d, net->h = %d\n", sized.w, sized.h, sized.c, im.w, im.h, im.c, net->w, net->h);
 
             fp = fopen("yolo_image_sized.bin", "wb");
             if(NULL == fp)

@@ -756,19 +756,106 @@ void forward_network_gpu(network *netp)
 
         {
             /* write intermediate layer results as bin file */
-            FILE *fp;
+            FILE *fp_results;
+            FILE *fp_weights;
+            FILE *fp_mean;
+            FILE *fp_variance;
+            FILE *fp_scales;
+            FILE *fp_biases;
+            FILE *fp_netinfo;
             char buffer[100];
+            static float sa_temp_buf_f32[608 * 608 * 32]; /* maximum */
+            static int sa_temp_buf_s32[8];
 
-            printf("forward_network_gpu: i:%d, in (h, w, c): (%d, %d, %d), out (h, w, c): (%d, %d, %d), l.truth: %d, l.batch: %d\n", i, l.h, l.w, l.c, l.out_h, l.out_w, l.out_c, l.truth, l.batch);
+#ifdef __DEBUG__
+            printf("forward_network_gpu: i:%d, l.type: %d, in (h, w, c): (%d, %d, %d), out (h, w, c): (%d, %d, %d), l.truth: %d, l.batch: %d, l.n = %d, l.groups = %d, l.size = %d, l.xnor = %d, l.stride = %d, l.pad = %d, l.batch_normalize = %d, l.binary = %d, l.nweights = %d, l.activation = %d, net.train = %d, l.flatten = %d, l.extra = %d, l.reverse = %d, l.outputs = %d, l.coords = %d, l.background = %d, l.softmax = %d, l.softmax_tree = %d, l.classes = %d, l.onlyforward = %d\n", i, l.type, l.h, l.w, l.c, l.out_h, l.out_w, l.out_c, l.truth, l.batch, l.n, l.groups, l.size, l.xnor, l.stride, l.pad, l.batch_normalize, l.binary, l.nweights, l.activation, net.train, l.flatten, l.extra, l.reverse, l.outputs, l.coords, l.background, l.softmax, l.softmax_tree, l.classes, l.onlyforward);
+            if(l.type == ROUTE)
+                printf("route_gpu only: l.input_layers[0] = %d, l.input_layers[1] = %d, l.input_sizes[0] = %d, l.input_sizes[1] = %d\n", l.input_layers[0], l.input_layers[1], l.input_sizes[0], l.input_sizes[1]);
+#endif
 
-            sprintf(buffer, "yolo_gpu_layer_%d.bin", i);
-            fp = fopen(buffer, "wb");
-            if(NULL == fp)
+            if(i == 0)
             {
-                printf("yolo_gpu_layer open error\n");
+                sprintf(buffer, "yolo_gpu_intermediate_results.bin");
+                fp_results = fopen(buffer, "wb");
+                if(NULL == fp_results)
+                {
+                    printf("yolo_gpu_intermediate_results open error\n");
+                }
+                sprintf(buffer, "yolo_gpu_weights.bin");
+                fp_weights = fopen(buffer, "wb");
+                if(NULL == fp_weights)
+                {
+                    printf("yolo_gpu_weights open error\n");
+                }
+                sprintf(buffer, "yolo_gpu_mean.bin");
+                fp_mean = fopen(buffer, "wb");
+                if(NULL == fp_mean)
+                {
+                    printf("yolo_gpu_mean open error\n");
+                }
+                sprintf(buffer, "yolo_gpu_variance.bin");
+                fp_variance = fopen(buffer, "wb");
+                if(NULL == fp_variance)
+                {
+                    printf("yolo_gpu_variance open error\n");
+                }
+                sprintf(buffer, "yolo_gpu_scales.bin");
+                fp_scales = fopen(buffer, "wb");
+                if(NULL == fp_scales)
+                {
+                    printf("yolo_gpu_scales open error\n");
+                }
+                sprintf(buffer, "yolo_gpu_biases.bin");
+                fp_biases = fopen(buffer, "wb");
+                if(NULL == fp_biases)
+                {
+                    printf("yolo_gpu_biases open error\n");
+                }
+                sprintf(buffer, "yolo_gpu_netinfo.bin");
+                fp_netinfo = fopen(buffer, "wb");
+                if(NULL == fp_netinfo)
+                {
+                    printf("yolo_gpu_netinfo open error\n");
+                }
             }
-            fwrite(l.output, l.out_w * l.out_h * l.out_c, sizeof(float), fp);
-            fclose(fp);
+
+            cudaMemcpy(sa_temp_buf_f32, l.output_gpu, l.out_w * l.out_h * l.out_c * sizeof(float), cudaMemcpyDeviceToHost);
+            fwrite(sa_temp_buf_f32, l.out_w * l.out_h * l.out_c, sizeof(float), fp_results);
+            if(l.type == CONVOLUTIONAL)
+            {
+                cudaMemcpy(sa_temp_buf_f32, l.weights_gpu, l.nweights * sizeof(float), cudaMemcpyDeviceToHost);
+                fwrite(sa_temp_buf_f32, l.nweights, sizeof(float), fp_weights);
+                if(l.batch_normalize == 1)
+                {
+                    cudaMemcpy(sa_temp_buf_f32, l.rolling_mean_gpu, l.out_c * sizeof(float), cudaMemcpyDeviceToHost);
+                    fwrite(sa_temp_buf_f32, l.out_c, sizeof(float), fp_mean);
+                    cudaMemcpy(sa_temp_buf_f32, l.rolling_variance_gpu, l.out_c * sizeof(float), cudaMemcpyDeviceToHost);
+                    fwrite(sa_temp_buf_f32, l.out_c, sizeof(float), fp_variance);
+                    cudaMemcpy(sa_temp_buf_f32, l.scales_gpu, l.out_c * sizeof(float), cudaMemcpyDeviceToHost);
+                    fwrite(sa_temp_buf_f32, l.out_c, sizeof(float), fp_scales);
+                }
+                cudaMemcpy(sa_temp_buf_f32, l.biases_gpu, l.out_c * sizeof(float), cudaMemcpyDeviceToHost);
+                fwrite(sa_temp_buf_f32, l.out_c, sizeof(float), fp_biases);
+            }
+            sa_temp_buf_s32[0] = l.type;
+            sa_temp_buf_s32[1] = l.out_w;
+            sa_temp_buf_s32[2] = l.out_h;
+            sa_temp_buf_s32[3] = l.out_c;
+            sa_temp_buf_s32[4] = l.size;
+            sa_temp_buf_s32[5] = l.pad;
+            sa_temp_buf_s32[6] = l.batch_normalize;
+            sa_temp_buf_s32[7] = l.nweights;
+            fwrite(sa_temp_buf_s32, 8, sizeof(int), fp_netinfo);
+            if(i == (net.n - 1))
+            {
+                fclose(fp_results);
+                fclose(fp_weights);
+                fclose(fp_mean);
+                fclose(fp_variance);
+                fclose(fp_scales);
+                fclose(fp_biases);
+                fclose(fp_netinfo);
+            }
         }          
     }
     pull_network_output(netp);
